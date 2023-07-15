@@ -1,0 +1,115 @@
+Question #1:
+What month stores rent the most movies?
+
+SQL Code:
+
+SELECT store_id, yr, 
+CASE 
+    WHEN mnt = '1' THEN 'January'
+    WHEN mnt = '2' THEN 'February'
+    WHEN mnt = '3' THEN 'March'
+	WHEN mnt = '4' THEN 'April'
+	WHEN mnt = '5' THEN 'May'
+	WHEN mnt = '6' THEN 'June'
+	WHEN mnt = '7' THEN 'July'
+	WHEN mnt = '8' THEN 'August'
+	WHEN mnt = '9' THEN 'September'
+	WHEN mnt = '10' THEN 'October'
+	WHEN mnt = '11' THEN 'Novemeber'
+	ELSE 'December'
+END AS monthi, t_count total_rentals
+
+FROM (SELECT EXTRACT(year FROM r.rental_date) as Yr,
+EXTRACT(month FROM r.rental_date) as mnt,
+st.store_id AS store_id, COUNT(r.*) t_count
+FROM rental r
+JOIN staff s
+ON s.staff_id= r.staff_id
+JOIN store st
+ON st.store_id = s.store_id
+GROUP BY yr, mnt, st.store_id
+ORDER BY t_count DESC) sub
+
+ 
+Question #2:
+Who are the top 10 paying customers and what is the total payment amount they made per each month and Total?
+
+SQL Code:
+/*TOP 10 payments by customer id*/
+WITH top_10 AS
+(SELECT customer_id cust_id, SUM(amount) AS total_payments
+  FROM payment
+  GROUP BY cust_id
+  ORDER BY total_payments DESC
+  LIMIT 10),
+
+/*full name of customers most payments by month*/
+monthpay AS
+(SELECT customer_id cust_id, DATE_TRUNC('month', p.payment_date) date_payment,
+SUM(p.amount) total_payment
+FROM payment p
+GROUP BY  customer_id, date_payment),
+
+customers AS
+(/*JOIN tables to get top 10 paying customers*/
+SELECT CONCAT(c.first_name, ' ', c.last_name) customer_name, monthpay.date_payment date_payment,
+monthpay.total_payment total_payment
+FROM top_10
+JOIN monthpay
+ON top_10.cust_id = monthpay.cust_id
+JOIN customer c
+ON monthpay.cust_id = c.customer_id
+ORDER by customer_name, date_payment)
+
+SELECT customer_name, date_payment, total_payment, 
+SUM(total_payment) OVER (PARTITION BY customer_name) total
+FROM customers
+
+
+
+QUESTION 3
+Lists each movie, the film category it is classified in, the number of times it has been rented out, and how many total times family movies were rented by category?
+
+SQL Code:
+WITH t1 AS
+(SELECT f.title movie, c.name category, 
+ AVG(f.rental_duration) duration, 
+ COUNT(r.*) AS rentals
+FROM film f
+JOIN film_category fc ON f.film_id = fc.film_id
+JOIN category c ON fc.category_id = c.category_id
+JOIN inventory i ON i.film_id = f.film_id
+JOIN rental r ON i.inventory_id = r.inventory_id
+WHERE c.name = 'Animation' OR c.name = 'Children' 
+OR c.name ='Classics' OR c.name = 'Comedy' OR c.name ='Family' 
+OR c.name = 'Music'
+GROUP BY movie, category
+ORDER BY category)
+
+SELECT t1.movie "Name of movie", t1.category "category", t1.rentals "Number of times rented", 
+SUM(rentals) OVER(PARTITION BY t1.category ORDER BY t1.category) "total rentals by category"
+FROM t1
+
+QUESTION 4
+Determine which is the top listed actor  that appears in most of the movies rented?
+
+/*actor and movies they appear*/
+WITH t1 AS
+(select CONCAT(a.first_name, ' ', a.last_name) actor_name, f.title nameofmovie
+from actor a
+JOIN film_actor fa
+ON a.actor_id = fa.actor_id
+JOIN film f
+ON f.film_id = fa.film_id
+GROUP BY actor_name, f.title
+ORDER BY actor_name),
+
+/*how many movies from the database the actor is in*/ 
+t2 AS
+(SELECT actor_name, nameofmovie, COUNT(nameofmovie) OVER(PARTITION BY actor_name) AS movies_with_sameactor
+FROM t1)
+
+SELECT actor_name, MAX(movies_with_sameactor) movies_made
+FROM t2
+GROUP BY actor_name
+
